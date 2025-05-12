@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Nearby Projects</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="leaflet.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial;
+    }
+
+    #map {
+      width: 100%;
+    }
+
+    #sidebar {
+      background-color: rgba(255, 255, 255, 0.75);
+      display: flex;
+      flex-direction: column;
+      padding: 1em;
+      box-sizing: border-box;
+    }
+
+    #search {
+      flex: 0 0 auto;
+      padding: 0.5em;
+      font-size: 1em;
+      margin-bottom: 1em;
+    }
+
+    #list {
+      flex: 1 1 auto;
+      overflow-y: auto;
+    }
+
+    .location {
+      margin-bottom: 1em;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 0.5em;
+      cursor: pointer;
+    }
+
+    .location:hover {
+      background-color: #f0f0f0;
+    }
+
+    .leaflet-tooltip {
+      font-size: 8px;
+    }
+
+    @media (orientation: portrait) {
+      #container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      #map {
+        height: 60vh;
+      }
+
+      #sidebar {
+        height: 40vh;
+        width: 100%;
+      }
+    }
+
+    @media (orientation: landscape) {
+      #container {
+        display: flex;
+        flex-direction: row;
+        height: 100vh;
+      }
+
+      #map {
+        height: 100vh;
+        width: 70vw;
+      }
+
+      #sidebar {
+        width: 30vw;
+        height: 100vh;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="container">
+  <div id="map"></div>
+  <div id="sidebar">
+    <input type="text" id="search" placeholder="Search projects by number, name, or address...">
+    <div id="list">Loading...</div>
+  </div>
+</div>
+
+<script src="leaflet.js"></script>
+<script>
+  let allMarkers = [];
+  let labelTooltips = [];
+
+  async function loadProjectsCSV() {
+    const res = await fetch("../scripts/projectrefined.csv");
+    const text = await res.text();
+    const rows = text.trim().split('\n').slice(1);
+
+    return rows.map(row => {
+      const parts = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+      if (parts.length < 8) return null;
+
+      const lat = parseFloat(parts[3]);
+      const lon = parseFloat(parts[4]);
+      if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0) return null;
+
+      return {
+        number: parts[0].replace(/"/g, '').trim(),
+        name: parts[1].replace(/"/g, '').trim(),
+        address: parts[2].replace(/"/g, '').trim(),
+        lat,
+        lon,
+        legal: parts[5].replace(/"/g, '').trim(),
+        manager: parts[6] ? parts[6].replace(/"/g, '').trim() : '',
+        status: parts[7] ? parts[7].replace(/"/g, '').trim() : ''
+      };
+    }).filter(p => p !== null);
+  }
+
+  function haversine(lat1, lon1, lat2, lon2) {
+    const toRad = x => x * Math.PI / 180;
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  async function initApp(userLat, userLon) {
+    const map = L.map('map').setView([userLat, userLon], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    L.marker([userLat, userLon]).addTo(map).bindPopup("You are here").openPopup();
+
+    const projects = await loadProjectsCSV();
+
+    const sorted = projects.map(p => ({
+      ...p,
+      distance: haversine(userLat, userLon, p.lat, p.lon)
+    })).sort((a, b) => a.distance - b.distance);
+
+    const list = document.getElementById("list");
+    const searchInput = document.getElementById("search");
+    list.innerHTML = "";
+    allMarkers = [];
+    labelTooltips = [];
+
+    sorted.forEach(p => {
+      const popupHtml = `
+        <strong>${p.number}</strong> ${p.name}<br>
+        ${p.address}<br>
+        ${p.legal}<br>
+        Project Manager: ${p.manager}<br>
+        Status: ${p.status}<br>
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}" target="_blank">Get Directions</a>
+      `;
+
+      const marker = L.marker([p.lat, p.lon], {
+        icon: L.icon({
+          iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
+          iconSize: [15, 24],
+          iconAnchor: [7.5, 24],
+          popupAnchor: [0, -24]
+        })
+      }).addTo(map).bindPopup(popupHtml);
+
+      const tooltip = L.tooltip({
+        permanent: true,
+        direction: 'top',
+        offset: [0, -20],
+        className: 'leaflet-tooltip'
+      }).setContent(p.number).setLatLng([p.lat, p.lon]).addTo(map);
+
+      labelTooltips.push(tooltip);
+      allMarkers.push({ marker, data: p });
+
+      const div = document.createElement("div");
+      div.className = "location";
+      div.innerHTML = `
+        <strong>${p.number}</strong> ${p.name}<br>
+        ${p.address}<br>
+        ${p.legal}<br>
+        ${p.distance.toFixed(2)} km
+      `;
+      div.onclick = () => {
+        map.setView([p.lat, p.lon], 17);
+        marker.openPopup();
+      };
+      list.appendChild(div);
+    });
+
+    searchInput.addEventListener("input", function () {
+      const term = this.value.toLowerCase();
+      list.innerHTML = "";
+      allMarkers.forEach(({ marker, data }) => {
+        const match =
+          data.number.toLowerCase().includes(term) ||
+          data.name.toLowerCase().includes(term) ||
+          data.address.toLowerCase().includes(term);
+
+        marker.setOpacity(match || term === "" ? 1 : 0.2);
+
+        if (match || term === "") {
+          const div = document.createElement("div");
+          div.className = "location";
+          div.innerHTML = `
+            <strong>${data.number}</strong> ${data.name}<br>
+            ${data.address}<br>
+            ${data.legal}<br>
+            ${data.distance.toFixed(2)} km
+          `;
+          div.onclick = () => {
+            map.setView([data.lat, data.lon], 17);
+            marker.openPopup();
+          };
+          list.appendChild(div);
+        }
+      });
+    });
+  }
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => initApp(pos.coords.latitude, pos.coords.longitude),
+      err => {
+        document.getElementById("list").innerText = "Location error: " + err.message;
+        console.error("Geolocation error:", err);
+      }
+    );
+  } else {
+    document.getElementById("list").innerText = "Geolocation not supported by this browser.";
+  }
+</script>
+</body>
+</html>
