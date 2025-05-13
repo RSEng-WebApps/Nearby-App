@@ -5,6 +5,8 @@
     <title>Nearby Projects</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="leaflet.css" />
+    <link rel="stylesheet" href="MarkerCluster.css" />
+    <link rel="stylesheet" href="MarkerCluster.Default.css" />
     <style>
         body { font-family: Arial; margin: 0; padding: 0; height: 100%; }
         h2 { text-align: center; padding: 0.5em; }
@@ -107,6 +109,7 @@
     </div>
 
     <script src="leaflet.js"></script>
+    <script src="leaflet.markercluster.js"></script>
     <script>
         let allMarkers = [];
         let allProjects = [];
@@ -115,17 +118,13 @@
         let searchInput = document.getElementById("search"); // Get search input once
         let filterBtn = document.getElementById("filter"); // Get filter button once
         let showAll = false; // Renamed variable to reflect the new functionality
-        let initialZoom;
+        let initialZoom = 13; // Set initial zoom level
         let debounceTimer;
         const debounceDelay = 250; // milliseconds
+        let markers = L.markerClusterGroup();
 
         function clearMarkers() {
-            allMarkers.forEach(markerData => {
-                map.removeLayer(markerData.marker);
-                if (markerData.label) {
-                    map.removeLayer(markerData.label);
-                }
-            });
+            markers.clearLayers();
             allMarkers = [];
         }
 
@@ -174,7 +173,7 @@
                     ${p.legal}<br>
                     Project Manager: ${p.manager}<br>
                     Status: ${p.status}<br>
-                    <a href="https://www.google.com/maps/dir/?api=1&destination=$${p.lat},${p.lon}" target="_blank">Get Directions</a>
+                    <a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank">Get Directions</a>
                 `;
 
                 const marker = L.marker([p.lat, p.lon], {
@@ -184,7 +183,7 @@
                         iconAnchor: [7.5, 24],
                         popupAnchor: [0, -24]
                     })
-                }).addTo(map).bindPopup(popupHtml);
+                }).bindPopup(popupHtml.replace("<br>\n                    <br>", "<br>")); // Remove extra blank line
 
                 const label = L.divIcon({
                     className: 'leaflet-label',
@@ -192,9 +191,10 @@
                     iconSize: [null, null],
                     iconAnchor: [marker.options.icon.options.iconSize[0] / 2, -marker.options.icon.options.iconSize[1] / 2]
                 });
-                const labelMarker = L.marker([p.lat, p.lon], { icon: label, interactive: false }).addTo(map);
+                const labelMarker = L.marker([p.lat, p.lon], { icon: label, interactive: false });
 
                 allMarkers.push({ marker, label: labelMarker, data: p });
+                markers.addLayer(marker);
 
                 const div = document.createElement("div");
                 div.className = "location";
@@ -205,11 +205,11 @@
                 };
                 projectListDiv.appendChild(div);
             });
+            map.addLayer(markers);
         }
 
         async function initApp(userLat, userLon) {
-            map = L.map('map').setView([userLat, userLon], 13);
-            initialZoom = map.getZoom();
+            map = L.map('map').setView([userLat, userLon], initialZoom);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
@@ -278,11 +278,14 @@
             const currentZoom = map.getZoom();
             allMarkers.forEach(markerData => {
                 if (markerData.label) {
-                    // Check if the label is currently on the map before trying to remove it
-                    if (currentZoom <= initialZoom - 2 && map.hasLayer(markerData.label)) {
-                        map.removeLayer(markerData.label);
-                    } else if (currentZoom > initialZoom - 2 && !map.hasLayer(markerData.label)) {
-                        map.addLayer(markerData.label);
+                    if (currentZoom > initialZoom + 2) {
+                        if (!map.hasLayer(markerData.label)) {
+                            map.addLayer(markerData.label);
+                        }
+                    } else {
+                        if (map.hasLayer(markerData.label)) {
+                            map.removeLayer(markerData.label);
+                        }
                     }
                 }
             });
