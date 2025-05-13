@@ -110,6 +110,8 @@
         let filterBtn = document.getElementById("filter"); // Get filter button once
         let showCompleted = false;
         let initialZoom;
+        let debounceTimer;
+        const debounceDelay = 250; // milliseconds
 
         function clearMarkers() {
             allMarkers.forEach(markerData => {
@@ -242,7 +244,11 @@
                 renderProjectList(filteredProjects, userLat, userLon);
             }
 
-            searchInput.addEventListener("input", applyFilter);
+            searchInput.addEventListener("input", function() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(applyFilter, debounceDelay);
+            });
+
             filterBtn.addEventListener("click", () => {
                 showCompleted = !showCompleted;
                 filterBtn.textContent = showCompleted ? "Show Active/Proposal Jobs" : "Show Completed Jobs";
