@@ -174,7 +174,7 @@
                     ${p.legal}<br>
                     Project Manager: ${p.manager}<br>
                     Status: ${p.status}<br>
-                    <a href="https://www.google.com/maps/dir/?api=1&destination=$${p.lat},${p.lon}" target="_blank">Get Directions</a>
+                    <a href="https://www.google.com/maps?q=${p.lat},${p.lon}" target="_blank">Get Directions</a>
                 `;
 
                 const marker = L.marker([p.lat, p.lon], {
