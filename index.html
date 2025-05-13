@@ -1,291 +1,190 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <title>Nearby Projects</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="leaflet.css" />
-    <style>
-        body { font-family: Arial; margin: 0; padding: 0; height: 100%; }
-        h2 { text-align: center; padding: 0.5em; }
+<style>
+    /* ... previous styles ... */
+    .leaflet-label div {
+        background-color: white;
+        padding: 2px 4px;
+        border-radius: 3px; /* Optional: for rounded corners */
+    }
+</style>
 
-        #container {
-            display: flex;
-            height: 100vh;
-        }
+<script>
+    let allMarkers = [];
+    let allProjects = [];
+    let map; // Declare map variable outside initApp for broader scope
+    let projectListDiv = document.getElementById("list"); // Get list element once
+    let searchInput = document.getElementById("search"); // Get search input once
+    let filterBtn = document.getElementById("filter"); // Get filter button once
+    let showAll = false; // Renamed variable to reflect the new functionality
+    let initialZoom;
+    let debounceTimer;
+    const debounceDelay = 250; // milliseconds
 
-        #map {
-            flex-grow: 1; /* Allow map to take remaining space */
-            height: 100%; /* Ensure map fills its container */
-        }
-
-        #sidebar {
-            background-color: rgba(255, 255, 255, 0.75);
-            display: flex;
-            flex-direction: column;
-            padding: 1em;
-            box-sizing: border-box;
-            width: 30vw; /* Default width for sidebar */
-            max-width: 400px; /* Optional: set a maximum width */
-        }
-
-        #search, #filter {
-            flex: 0 0 auto;
-            padding: 0.5em;
-            font-size: 1em;
-            margin-bottom: 0.5em;
-        }
-
-        #list {
-            flex: 1 1 auto;
-            overflow-y: auto;
-            padding: 0; /* Remove default padding for better list rendering */
-        }
-
-        .location {
-            padding: 0.75em 1em; /* Adjust padding for list items */
-            border-bottom: 1px solid #ccc;
-            cursor: pointer;
-            font-size: 0.9em; /* Slightly reduce font size for list items */
-        }
-
-        .location:last-child {
-            border-bottom: none; /* Remove border from the last item */
-        }
-
-        .location strong {
-            font-weight: bold;
-        }
-
-        .location:hover {
-            background-color: #f0f0f0;
-        }
-
-        .leaflet-tooltip {
-            font-size: 10px; /* Keep tooltip size consistent */
-        }
-
-        /* Responsive adjustments */
-        @media (orientation: portrait) {
-            #container {
-                flex-direction: column;
+    function clearMarkers() {
+        allMarkers.forEach(markerData => {
+            map.removeLayer(markerData.marker);
+            if (markerData.label) {
+                map.removeLayer(markerData.label);
             }
-            #map {
-                height: 60vh;
-                width: 100%;
-            }
-            #sidebar {
-                height: 40vh;
-                width: 100%;
-                max-width: none; /* Reset max-width for portrait */
-            }
-        }
-
-        @media (orientation: landscape) {
-            #map {
-                width: 70vw;
-            }
-        }
-    </style>
-</head>
-<body>
-
-    <h2>Nearby Projects</h2>
-    <div id="container">
-        <div id="map"></div>
-        <div id="sidebar">
-            <input type="text" id="search" placeholder="Search projects by number, name, or address...">
-            <button id="filter">Show Completed Jobs</button>
-            <div id="list">Loading...</div>
-        </div>
-    </div>
-
-    <script src="leaflet.js"></script>
-    <script>
-        let allMarkers = [];
-        let allProjects = [];
-        let map; // Declare map variable outside initApp for broader scope
-        let projectListDiv = document.getElementById("list"); // Get list element once
-        let searchInput = document.getElementById("search"); // Get search input once
-        let filterBtn = document.getElementById("filter"); // Get filter button once
-        let showCompleted = false;
-        let initialZoom;
-        let debounceTimer;
-        const debounceDelay = 250; // milliseconds
-
-        function clearMarkers() {
-            allMarkers.forEach(markerData => {
-                map.removeLayer(markerData.marker);
-                if (markerData.label) {
-                    map.removeLayer(markerData.label);
-                }
-            });
-            allMarkers = [];
-        }
-
-        async function loadProjectsCSV() {
-            const res = await fetch("projectrefined.csv");
-            const text = await res.text();
-            const rows = text.trim().split('\n').slice(1);
-
-            return rows.map(row => {
-                const parts = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                if (parts.length < 8) return null;
-
-                const projectNumber = parts[0].trim().replace(/"/g, '');
-                const name = parts[1].trim().replace(/"/g, '');
-                const address = parts[2].trim().replace(/"/g, '');
-                const lat = parseFloat(parts[3]);
-                const lon = parseFloat(parts[4]);
-                const legal = parts[5].trim().replace(/"/g, '') || '';
-                const manager = parts[6].trim().replace(/"/g, '') || '';
-                const status = parts[7].trim().replace(/"/g, '').toLowerCase() || '';
-
-                if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0) return null;
-
-                return { projectNumber, name, address, lat, lon, legal, manager, status };
-            }).filter(p => p !== null);
-        }
-
-        function haversine(lat1, lon1, lat2, lon2) {
-            const toRad = x => x * Math.PI / 180;
-            const R = 6371;
-            const dLat = toRad(lat2 - lat1);
-            const dLon = toRad(lon2 - lon1);
-            const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        }
-
-        function renderProjectList(projects, userLat, userLon) {
-            projectListDiv.innerHTML = "";
-            clearMarkers();
-
-            projects.forEach(p => {
-                const distance = haversine(userLat, userLon, p.lat, p.lon);
-                const popupHtml = `
-                    <strong>${p.projectNumber}</strong> ${p.name}<br>
-                    ${p.address}<br>
-                    ${p.legal}<br>
-                    Project Manager: ${p.manager}<br>
-                    Status: ${p.status}<br>
-                    <a href="https://www.google.com/maps/dir/?api=1&destination=$${p.lat},${p.lon}" target="_blank">Get Directions</a>
-                `;
-
-                const marker = L.marker([p.lat, p.lon], {
-                    icon: L.icon({
-                        iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
-                        iconSize: [15, 24],
-                        iconAnchor: [7.5, 24],
-                        popupAnchor: [0, -24]
-                    })
-                }).addTo(map).bindPopup(popupHtml);
-
-                const label = L.divIcon({
-                    className: 'leaflet-label',
-                    html: `<div style="font-size: 10px; white-space: nowrap;">${p.projectNumber}</div>`,
-                    iconSize: [null, null],
-                    iconAnchor: [marker.options.icon.options.iconSize[0] / 2, -marker.options.icon.options.iconSize[1] / 2]
-                });
-                const labelMarker = L.marker([p.lat, p.lon], { icon: label, interactive: false }).addTo(map);
-
-                allMarkers.push({ marker, label: labelMarker, data: p });
-
-                const div = document.createElement("div");
-                div.className = "location";
-                div.innerHTML = `<strong>${p.projectNumber}</strong> (${distance.toFixed(2)} km) ${p.name}`;
-                div.onclick = () => {
-                    map.setView([p.lat, p.lon], 17);
-                    marker.openPopup();
-                };
-                projectListDiv.appendChild(div);
-            });
-        }
-
-        async function initApp(userLat, userLon) {
-            map = L.map('map').setView([userLat, userLon], 13);
-            initialZoom = map.getZoom();
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
-
-            L.marker([userLat, userLon], {
-                icon: L.icon({
-                    iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png',
-                    iconSize: [20, 32],
-                    iconAnchor: [10, 32],
-                    popupAnchor: [0, -32]
-                })
-            }).addTo(map).bindPopup("You are here").openPopup();
-
-            allProjects = await loadProjectsCSV();
-            allProjects.forEach(p => {
-                p.distance = haversine(userLat, userLon, p.lat, p.lon);
-            });
-            allProjects.sort((a, b) => a.distance - b.distance);
-
-            function applyFilter() {
-                let filteredProjects = [...allProjects]; // Create a copy
-
-                const activeProposal = filteredProjects.filter(p => ['active', 'proposal'].includes(p.status));
-                const completed = filteredProjects.filter(p => p.status === 'completed');
-
-                filteredProjects = showCompleted ? completed : activeProposal;
-
-                const term = searchInput.value.toLowerCase();
-                if (term) {
-                    filteredProjects = filteredProjects.filter(p =>
-                        p.projectNumber.toLowerCase().includes(term) ||
-                        p.name.toLowerCase().includes(term) ||
-                        p.address.toLowerCase().includes(term)
-                    );
-                }
-
-                renderProjectList(filteredProjects, userLat, userLon);
-            }
-
-            searchInput.addEventListener("input", function() {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(applyFilter, debounceDelay);
-            });
-
-            filterBtn.addEventListener("click", () => {
-                showCompleted = !showCompleted;
-                filterBtn.textContent = showCompleted ? "Show Active/Proposal Jobs" : "Show Completed Jobs";
-                applyFilter();
-            });
-
-            applyFilter(); // Initial render with only active/proposal
-        }
-
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                pos => initApp(pos.coords.latitude, pos.coords.longitude),
-                err => {
-                    projectListDiv.innerText = "Location error: " + err.message;
-                }
-            );
-        } else {
-            projectListDiv.innerText = "Geolocation not supported.";
-        }
-
-        map.on('zoomend', function() {
-            const currentZoom = map.getZoom();
-            allMarkers.forEach(markerData => {
-                if (markerData.label) {
-                    if (currentZoom > initialZoom - 2) {
-                        if (!map.hasLayer(markerData.label)) {
-                            map.addLayer(markerData.label);
-                        }
-                    } else {
-                        if (map.hasLayer(markerData.label)) {
-                            map.removeLayer(markerData.label);
-                        }
-                    }
-                }
-            });
         });
-    </script>
+        allMarkers = [];
+    }
 
-</body>
-</html>
+    async function loadProjectsCSV() {
+        const res = await fetch("projectrefined.csv");
+        const text = await res.text();
+        const rows = text.trim().split('\n').slice(1);
+
+        return rows.map(row => {
+            const parts = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+            if (parts.length < 8) return null;
+
+            const projectNumber = parts[0].trim().replace(/"/g, '');
+            const name = parts[1].trim().replace(/"/g, '');
+            const address = parts[2].trim().replace(/"/g, '');
+            const lat = parseFloat(parts[3]);
+            const lon = parseFloat(parts[4]);
+            const legal = parts[5].trim().replace(/"/g, '') || '';
+            const manager = parts[6].trim().replace(/"/g, '') || '';
+            const status = parts[7].trim().replace(/"/g, '').toLowerCase() || '';
+
+            if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0) return null;
+
+            return { projectNumber, name, address, lat, lon, legal, manager, status };
+        }).filter(p => p !== null);
+    }
+
+    function haversine(lat1, lon1, lat2, lon2) {
+        const toRad = x => x * Math.PI / 180;
+        const R = 6371;
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function renderProjectList(projects, userLat, userLon) {
+        projectListDiv.innerHTML = "";
+        clearMarkers();
+
+        projects.forEach(p => {
+            const distance = haversine(userLat, userLon, p.lat, p.lon);
+            const popupHtml = `
+                <strong>${p.projectNumber}</strong> ${p.name}<br>
+                ${p.address}<br>
+                ${p.legal}<br>
+                Project Manager: ${p.manager}<br>
+                Status: ${p.status}<br>
+                <a href="https://www.google.com/maps/dir/?api=1&destination=$${p.lat},${p.lon}" target="_blank">Get Directions</a>
+            `;
+
+            const marker = L.marker([p.lat, p.lon], {
+                icon: L.icon({
+                    iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
+                    iconSize: [15, 24],
+                    iconAnchor: [7.5, 24],
+                    popupAnchor: [0, -24]
+                })
+            }).addTo(map).bindPopup(popupHtml);
+
+            const label = L.divIcon({
+                className: 'leaflet-label',
+                html: `<div style="font-size: 10px; white-space: nowrap;">${p.projectNumber}</div>`,
+                iconSize: [null, null],
+                iconAnchor: [marker.options.icon.options.iconSize[0] / 2, -marker.options.icon.options.iconSize[1] / 2]
+            });
+            const labelMarker = L.marker([p.lat, p.lon], { icon: label, interactive: false }).addTo(map);
+
+            allMarkers.push({ marker, label: labelMarker, data: p });
+
+            const div = document.createElement("div");
+            div.className = "location";
+            div.innerHTML = `<strong>${p.projectNumber}</strong> (${distance.toFixed(2)} km) ${p.name}`;
+            div.onclick = () => {
+                map.setView([p.lat, p.lon], 17);
+                marker.openPopup();
+            };
+            projectListDiv.appendChild(div);
+        });
+    }
+
+    async function initApp(userLat, userLon) {
+        map = L.map('map').setView([userLat, userLon], 13);
+        initialZoom = map.getZoom();
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        L.marker([userLat, userLon], {
+            icon: L.icon({
+                iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png',
+                iconSize: [20, 32],
+                iconAnchor: [10, 32],
+                popupAnchor: [0, -32]
+            })
+        }).addTo(map).bindPopup("You are here").openPopup();
+
+        allProjects = await loadProjectsCSV();
+        allProjects.forEach(p => {
+            p.distance = haversine(userLat, userLon, p.lat, p.lon);
+        });
+        allProjects.sort((a, b) => a.distance - b.distance);
+
+        function applyFilter() {
+            let filteredProjects = [...allProjects]; // Create a copy
+
+            if (!showAll) {
+                filteredProjects = filteredProjects.filter(p => ['active', 'proposal'].includes(p.status));
+            }
+
+            const term = searchInput.value.toLowerCase();
+            if (term) {
+                filteredProjects = filteredProjects.filter(p =>
+                    p.projectNumber.toLowerCase().includes(term) ||
+                    p.name.toLowerCase().includes(term) ||
+                    p.address.toLowerCase().includes(term)
+                );
+            }
+
+            renderProjectList(filteredProjects, userLat, userLon);
+        }
+
+        searchInput.addEventListener("input", function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(applyFilter, debounceDelay);
+        });
+
+        filterBtn.addEventListener("click", () => {
+            showAll = !showAll;
+            filterBtn.textContent = showAll ? "Show Active/Proposal Jobs" : "Show All Projects"; // Updated button text
+            applyFilter();
+        });
+
+        applyFilter(); // Initial render with only active/proposal
+    }
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            pos => initApp(pos.coords.latitude, pos.coords.longitude),
+            err => {
+                projectListDiv.innerText = "Location error: " + err.message;
+            }
+        );
+    } else {
+        projectListDiv.innerText = "Geolocation not supported.";
+    }
+
+    map.on('zoomend', function() {
+        const currentZoom = map.getZoom();
+        allMarkers.forEach(markerData => {
+            if (markerData.label) {
+                // Check if the label is currently on the map before trying to remove it
+                if (currentZoom <= initialZoom - 2 && map.hasLayer(markerData.label)) {
+                    map.removeLayer(markerData.label);
+                } else if (currentZoom > initialZoom - 2 && !map.hasLayer(markerData.label)) {
+                    map.addLayer(markerData.label);
+                }
+            }
+        });
+    });
+</script>
