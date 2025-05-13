@@ -160,50 +160,50 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
 
-        function renderProjectList(projects, userLat, userLon) {
-            projectListDiv.innerHTML = "";
-            clearMarkers();
+function renderProjectList(projects, userLat, userLon) {
+    projectListDiv.innerHTML = "";
+    clearMarkers();
 
-            projects.forEach(p => {
-                const distance = haversine(userLat, userLon, p.lat, p.lon);
-                const popupHtml = `
-                    <strong>${p.projectNumber}</strong> ${p.name}<br>
-                    ${p.address}<br>
-                    ${p.legal}<br>
-                    Project Manager: ${p.manager}<br>
-                    Status: ${p.status}<br>
-                    <a href="https://www.google.com/maps?q=${p.lat},${p.lon}" target="_blank">Get Directions</a>
-                `;
+    projects.forEach(p => {
+        const distance = haversine(userLat, userLon, p.lat, p.lon);
+        const popupHtml = `
+            <strong>${p.projectNumber}</strong> ${p.name}<br>
+            ${p.address}<br>
+            ${p.legal ? p.legal + '<br>' : ''}
+            Project Manager: ${p.manager}<br>
+            Status: ${p.status}<br>
+            <a href="https://www.google.com/maps?q=$${p.lat},${p.lon}" target="_blank">Get Directions</a>
+        `.trim(); // Added .trim() to remove leading/trailing whitespace
 
-                const marker = L.marker([p.lat, p.lon], {
-                    icon: L.icon({
-                        iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
-                        iconSize: [15, 24],
-                        iconAnchor: [7.5, 24],
-                        popupAnchor: [0, -24]
-                    })
-                }).addTo(map).bindPopup(popupHtml);
+        const marker = L.marker([p.lat, p.lon], {
+            icon: L.icon({
+                iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
+                iconSize: [15, 24],
+                iconAnchor: [7.5, 24],
+                popupAnchor: [0, -24]
+            })
+        }).addTo(map).bindPopup(popupHtml);
 
-                const label = L.divIcon({
-                    className: 'leaflet-label',
-                    html: `<div style="font-size: 10px; white-space: nowrap;">${p.projectNumber}</div>`,
-                    iconSize: [null, null],
-                    iconAnchor: [marker.options.icon.options.iconSize[0] / 2, -marker.options.icon.options.iconSize[1] / 2]
-                });
-                const labelMarker = L.marker([p.lat, p.lon], { icon: label, interactive: false }).addTo(map);
+        const label = L.divIcon({
+            className: 'leaflet-label',
+            html: `<div style="font-size: 10px; white-space: nowrap;">${p.projectNumber}</div>`,
+            iconSize: [null, null],
+            iconAnchor: [marker.options.icon.options.iconSize[0] / 2, -marker.options.icon.options.iconSize[1] / 2]
+        });
+        const labelMarker = L.marker([p.lat, p.lon], { icon: label, interactive: false }).addTo(map);
 
-                allMarkers.push({ marker, label: labelMarker, data: p });
+        allMarkers.push({ marker, label: labelMarker, data: p });
 
-                const div = document.createElement("div");
-                div.className = "location";
-                div.innerHTML = `<strong>${p.projectNumber}</strong> (${distance.toFixed(2)} km) ${p.name}`;
-                div.onclick = () => {
-                    map.setView([p.lat, p.lon], 17);
-                    marker.openPopup();
-                };
-                projectListDiv.appendChild(div);
-            });
-        }
+        const div = document.createElement("div");
+        div.className = "location";
+        div.innerHTML = `<strong>${p.projectNumber}</strong> (${distance.toFixed(2)} km) ${p.name}`;
+        div.onclick = () => {
+            map.setView([p.lat, p.lon], 17);
+            marker.openPopup();
+        };
+        projectListDiv.appendChild(div);
+    });
+}
 
         async function initApp(userLat, userLon) {
             map = L.map('map').setView([userLat, userLon], 13);
