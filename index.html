@@ -119,6 +119,14 @@
     let debounceTimer;
     const debounceDelay = 250; // milliseconds
 
+    // Define the red pin icon configuration
+    const redPinIcon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png',
+        iconSize: [20, 32],
+        iconAnchor: [10, 32],
+        popupAnchor: [0, -32]
+    });
+
     function clearMarkers() {
         allMarkers.forEach(markerData => {
             map.removeLayer(markerData.marker);
@@ -216,14 +224,7 @@
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        userLocationMarker = L.marker(userLatLon, {
-            icon: L.icon({
-                iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png',
-                iconSize: [20, 32],
-                iconAnchor: [10, 32],
-                popupAnchor: [0, -32]
-            })
-        }).addTo(map).bindPopup("You are here").openPopup();
+        userLocationMarker = L.marker(userLatLon, { icon: redPinIcon }).addTo(map).bindPopup("You are here").openPopup();
 
         // Custom control to pan to user location
         const panToUser = L.Control.extend({
@@ -234,7 +235,7 @@
                 container.style.padding = '5px';
                 container.style.borderRadius = '4px';
                 container.style.cursor = 'pointer';
-                container.innerHTML = '📍 My Location';
+                container.innerHTML = '<img src="https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png" style="width: 16px; height: 26px; vertical-align: middle; margin-right: 5px;">My Location';
                 container.onclick = function() {
                     if (userLatLon) {
                         map.setView(userLatLon, 15); // Pan and zoom to user's location
@@ -332,6 +333,8 @@
 
     .leaflet-bar.leaflet-control-custom {
         border-radius: 4px;
+        display: flex; /* Align icon and text */
+        align-items: center; /* Vertically align icon and text */
     }
 </style>
 </body>
