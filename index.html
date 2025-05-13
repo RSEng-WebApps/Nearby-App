@@ -95,7 +95,7 @@
         <div id="map"></div>
         <div id="sidebar">
             <input type="text" id="search" placeholder="Search projects by number, name, or address...">
-            <button id="filter">Show Only Active/Proposal</button>
+            <button id="filter">Show Completed Jobs</button>
             <div id="list">Loading...</div>
         </div>
     </div>
@@ -108,13 +108,14 @@
         let projectListDiv = document.getElementById("list"); // Get list element once
         let searchInput = document.getElementById("search"); // Get search input once
         let filterBtn = document.getElementById("filter"); // Get filter button once
-        let showFiltered = false;
+        let showCompleted = false;
+        let initialZoom;
 
         function clearMarkers() {
             allMarkers.forEach(markerData => {
                 map.removeLayer(markerData.marker);
-                if (markerData.tooltip) {
-                    map.removeLayer(markerData.tooltip);
+                if (markerData.label) {
+                    map.removeLayer(markerData.label);
                 }
             });
             allMarkers = [];
@@ -165,7 +166,7 @@
                     ${p.legal}<br>
                     Project Manager: ${p.manager}<br>
                     Status: ${p.status}<br>
-                    <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}" target="_blank">Get Directions</a>
+                    <a href="https://www.google.com/maps/dir/?api=1&destination=$${p.lat},${p.lon}" target="_blank">Get Directions</a>
                 `;
 
                 const marker = L.marker([p.lat, p.lon], {
@@ -177,22 +178,19 @@
                     })
                 }).addTo(map).bindPopup(popupHtml);
 
-                const tooltip = L.tooltip({
-                    permanent: true,
-                    direction: 'top',
-                    offset: [0, -20],
-                    className: 'leaflet-tooltip'
-                }).setContent(p.projectNumber).setLatLng([p.lat, p.lon]).addTo(map);
+                const label = L.divIcon({
+                    className: 'leaflet-label',
+                    html: `<div style="font-size: 10px; white-space: nowrap;">${p.projectNumber}</div>`,
+                    iconSize: [null, null],
+                    iconAnchor: [marker.options.icon.options.iconSize[0] / 2, -marker.options.icon.options.iconSize[1] / 2]
+                });
+                const labelMarker = L.marker([p.lat, p.lon], { icon: label, interactive: false }).addTo(map);
 
-                allMarkers.push({ marker, tooltip, data: p });
+                allMarkers.push({ marker, label: labelMarker, data: p });
 
                 const div = document.createElement("div");
                 div.className = "location";
-                div.innerHTML = `
-                    <strong>${p.projectNumber}</strong> ${p.name}<br>
-                    ${p.address}<br>
-                    ${distance.toFixed(2)} km
-                `;
+                div.innerHTML = `<strong>${p.projectNumber}</strong> (${distance.toFixed(2)} km) ${p.name}`;
                 div.onclick = () => {
                     map.setView([p.lat, p.lon], 17);
                     marker.openPopup();
@@ -203,6 +201,8 @@
 
         async function initApp(userLat, userLon) {
             map = L.map('map').setView([userLat, userLon], 13);
+            initialZoom = map.getZoom();
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
             }).addTo(map);
@@ -223,11 +223,12 @@
             allProjects.sort((a, b) => a.distance - b.distance);
 
             function applyFilter() {
-                let filteredProjects = [...allProjects]; // Create a copy to avoid modifying the original
+                let filteredProjects = [...allProjects]; // Create a copy
 
-                if (showFiltered) {
-                    filteredProjects = filteredProjects.filter(p => ['active', 'proposal'].includes(p.status));
-                }
+                const activeProposal = filteredProjects.filter(p => ['active', 'proposal'].includes(p.status));
+                const completed = filteredProjects.filter(p => p.status === 'completed');
+
+                filteredProjects = showCompleted ? completed : activeProposal;
 
                 const term = searchInput.value.toLowerCase();
                 if (term) {
@@ -243,12 +244,12 @@
 
             searchInput.addEventListener("input", applyFilter);
             filterBtn.addEventListener("click", () => {
-                showFiltered = !showFiltered;
-                filterBtn.textContent = showFiltered ? "Show All Projects" : "Show Only Active/Proposal";
+                showCompleted = !showCompleted;
+                filterBtn.textContent = showCompleted ? "Show Active/Proposal Jobs" : "Show Completed Jobs";
                 applyFilter();
             });
 
-            applyFilter(); // Initial render
+            applyFilter(); // Initial render with only active/proposal
         }
 
         if (navigator.geolocation) {
@@ -261,6 +262,23 @@
         } else {
             projectListDiv.innerText = "Geolocation not supported.";
         }
+
+        map.on('zoomend', function() {
+            const currentZoom = map.getZoom();
+            allMarkers.forEach(markerData => {
+                if (markerData.label) {
+                    if (currentZoom > initialZoom - 2) {
+                        if (!map.hasLayer(markerData.label)) {
+                            map.addLayer(markerData.label);
+                        }
+                    } else {
+                        if (map.hasLayer(markerData.label)) {
+                            map.removeLayer(markerData.label);
+                        }
+                    }
+                }
+            });
+        });
     </script>
 
 </body>
