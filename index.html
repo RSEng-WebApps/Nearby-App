@@ -105,6 +105,45 @@
     </div>
 
     <script src="leaflet.js"></script>
+    <script>
+        let allMarkers = [];
+        let allProjects = [];
+        let map; // Declare map variable outside initApp for broader scope
+        let projectListDiv = document.getElementById("list"); // Get list element once
+        let searchInput = document.getElementById("search"); // Get search input once
+        let filterBtn = document.getElementById("filter"); // Get filter button once
+        let showAll = false; // Renamed variable to reflect the new functionality
+        let initialZoom;
+        let debounceTimer;
+        const debounceDelay = 250; // milliseconds
+
+        function clearMarkers() {
+            allMarkers.forEach(markerData => {
+                map.removeLayer(markerData.marker);
+                if (markerData.label) {
+                    map.removeLayer(markerData.label);
+                }
+            });
+            allMarkers = [];
+        }
+
+        async function loadProjectsCSV() {
+            const res = await fetch("projectrefined.csv");
+            const text = await res.text();
+            const rows = text.trim().split('\n').slice(1);
+
+            return rows.map(row => {
+                const parts = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                if (parts.length < 8) return null;
+
+                const projectNumber = parts[0].trim().replace(/"/g, '');
+                const name = parts[1].trim().replace(/"/g, '');
+                const address = parts[2].trim().replace(/"/g, '');
+                const lat = parseFloat(parts[3]);
+                const lon = parseFloat(parts[4]);
+                const legal = parts[5].trim().replace(/"/g, '') || '';
+                const manager = parts[6].trim().replace(/"/g, '') || '';
+                const status = parts[7].trim().replace(/"/g, '').toLowerCase() || '';
 <script>
     let allMarkers = [];
     let allProjects = [];
@@ -118,14 +157,6 @@
     let userLatLon;
     let debounceTimer;
     const debounceDelay = 250; // milliseconds
-
-    // Define the red pin icon configuration
-    const redPinIcon = L.icon({
-        iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png',
-        iconSize: [20, 32],
-        iconAnchor: [10, 32],
-        popupAnchor: [0, -32]
-    });
 
     function clearMarkers() {
         allMarkers.forEach(markerData => {
@@ -164,10 +195,8 @@
     function haversine(lat1, lon1, lat2, lon2) {
         const toRad = x => x * Math.PI / 180;
         const R = 6371;
-        const R = 6371; // Radius of the Earth in km
         const dLat = toRad(lat2 - lat1);
         const dLon = toRad(lat2 - lon1);
-        const dLon = toRad(lon2 - lon1);
         const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
@@ -178,7 +207,6 @@
 
         projects.forEach(p => {
             const distance = haversine(userLat, userLon, p.lat, p.lon);
-            const distance = haversine(userLat, userLon, p.lat, p.lon); // Use user's lat/lon
             const popupHtml = `
                 <strong>${p.projectNumber}</strong> ${p.name}<br>
                 ${p.address}<br>
@@ -197,6 +225,7 @@
                 })
             }).addTo(map).bindPopup(popupHtml);
 
+                if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0) return null;
             const label = L.divIcon({
                 className: 'leaflet-label',
                 html: `<div style="font-size: 10px; white-space: nowrap;">${p.projectNumber}</div>`,
@@ -218,16 +247,55 @@
         });
     }
 
+                return { projectNumber, name, address, lat, lon, legal, manager, status };
+            }).filter(p => p !== null);
+        }
     async function initApp(userLat, userLon) {
         userLatLon = [userLat, userLon]; // Store user's location
         map = L.map('map').setView(userLatLon, 13);
         initialZoom = map.getZoom();
 
+        function haversine(lat1, lon1, lat2, lon2) {
+            const toRad = x => x * Math.PI / 180;
+            const R = 6371;
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        userLocationMarker = L.marker(userLatLon, { icon: redPinIcon }).addTo(map).bindPopup("You are here").openPopup();
+function renderProjectList(projects, userLat, userLon) {
+    projectListDiv.innerHTML = "";
+    clearMarkers();
+
+    projects.forEach(p => {
+        const distance = haversine(userLat, userLon, p.lat, p.lon);
+        const popupHtml = `
+            <strong>${p.projectNumber}</strong> ${p.name}<br>
+            ${p.address}<br>
+            ${p.legal ? p.legal + '<br>' : ''}
+            Project Manager: ${p.manager}<br>
+            Status: ${p.status}<br>
+            <a href="https://www.google.com/maps?q=$${p.lat},${p.lon}" target="_blank">Get Directions</a>
+        `.trim(); // Added .trim() to remove leading/trailing whitespace
+
+        const marker = L.marker([p.lat, p.lon], {
+        userLocationMarker = L.marker(userLatLon, {
+            icon: L.icon({
+                iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
+                iconSize: [15, 24],
+                iconAnchor: [7.5, 24],
+                popupAnchor: [0, -24]
+                iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png',
+                iconSize: [20, 32],
+                iconAnchor: [10, 32],
+                popupAnchor: [0, -32]
+            })
+        }).addTo(map).bindPopup(popupHtml);
+        }).addTo(map).bindPopup("You are here").openPopup();
 
         // Custom control to pan to user location
         const panToUser = L.Control.extend({
@@ -238,7 +306,7 @@
                 container.style.padding = '5px';
                 container.style.borderRadius = '4px';
                 container.style.cursor = 'pointer';
-                container.innerHTML = '<img src="https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png" style="width: 16px; height: 26px; vertical-align: middle; margin-right: 5px;">My Location';
+                container.innerHTML = '📍 My Location';
                 container.onclick = function() {
                     if (userLatLon) {
                         map.setView(userLatLon, 15); // Pan and zoom to user's location
@@ -250,27 +318,81 @@
                 return container;
             },
 
+        const label = L.divIcon({
+            className: 'leaflet-label',
+            html: `<div style="font-size: 10px; white-space: nowrap;">${p.projectNumber}</div>`,
+            iconSize: [null, null],
+            iconAnchor: [marker.options.icon.options.iconSize[0] / 2, -marker.options.icon.options.iconSize[1] / 2]
             onRemove: function(map) {
                 // Nothing to do here
             }
         });
+        const labelMarker = L.marker([p.lat, p.lon], { icon: label, interactive: false }).addTo(map);
 
+        allMarkers.push({ marker, label: labelMarker, data: p });
+
+        const div = document.createElement("div");
+        div.className = "location";
+        div.innerHTML = `<strong>${p.projectNumber}</strong> (${distance.toFixed(2)} km) ${p.name}`;
+        div.onclick = () => {
+            map.setView([p.lat, p.lon], 17);
+            marker.openPopup();
+        };
+        projectListDiv.appendChild(div);
+    });
+}
+
+        async function initApp(userLat, userLon) {
+            map = L.map('map').setView([userLat, userLon], 13);
+            initialZoom = map.getZoom();
         map.addControl(new panToUser({ position: 'bottomright' })); // Add the control to the map
 
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            L.marker([userLat, userLon], {
+                icon: L.icon({
+                    iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png',
+                    iconSize: [20, 32],
+                    iconAnchor: [10, 32],
+                    popupAnchor: [0, -32]
+                })
+            }).addTo(map).bindPopup("You are here").openPopup();
+
+            allProjects = await loadProjectsCSV();
+            allProjects.forEach(p => {
+                p.distance = haversine(userLat, userLon, p.lat, p.lon);
+            });
+            allProjects.sort((a, b) => a.distance - b.distance);
+
+            function applyFilter() {
+                let filteredProjects = [...allProjects]; // Create a copy
         allProjects = await loadProjectsCSV();
         allProjects.forEach(p => {
             p.distance = haversine(userLat, userLon, p.lat, p.lon);
-            p.distance = haversine(userLat, userLon, p.lat, p.lon); // Ensure distance is calculated here as well
         });
         allProjects.sort((a, b) => a.distance - b.distance);
 
+                if (!showAll) {
+                    filteredProjects = filteredProjects.filter(p => ['active', 'proposal'].includes(p.status));
+                }
         function applyFilter() {
             let filteredProjects = [...allProjects]; // Create a copy
 
+                const term = searchInput.value.toLowerCase();
+                if (term) {
+                    filteredProjects = filteredProjects.filter(p =>
+                        p.projectNumber.toLowerCase().includes(term) ||
+                        p.name.toLowerCase().includes(term) ||
+                        p.address.toLowerCase().includes(term)
+                    );
+                }
             if (!showAll) {
                 filteredProjects = filteredProjects.filter(p => ['active', 'proposal'].includes(p.status));
             }
 
+                renderProjectList(filteredProjects, userLat, userLon);
             const term = searchInput.value.toLowerCase();
             if (term) {
                 filteredProjects = filteredProjects.filter(p =>
@@ -280,23 +402,52 @@
                 );
             }
 
+            searchInput.addEventListener("input", function() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(applyFilter, debounceDelay);
+            });
             renderProjectList(filteredProjects, userLat, userLon);
         }
 
+            filterBtn.addEventListener("click", () => {
+                showAll = !showAll;
+                filterBtn.textContent = showAll ? "Show Active/Proposal Jobs" : "Show All Projects"; // Updated button text
+                applyFilter();
+            });
         searchInput.addEventListener("input", function() {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(applyFilter, debounceDelay);
         });
 
+            applyFilter(); // Initial render with only active/proposal
+        }
         filterBtn.addEventListener("click", () => {
             showAll = !showAll;
             filterBtn.textContent = showAll ? "Show Active/Proposal Jobs" : "Show All Projects"; // Updated button text
             applyFilter();
         });
 
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                pos => initApp(pos.coords.latitude, pos.coords.longitude),
+                err => {
+                    projectListDiv.innerText = "Location error: " + err.message;
+                }
+            );
+        } else {
+            projectListDiv.innerText = "Geolocation not supported.";
+        }
         applyFilter(); // Initial render with only active/proposal
     }
 
+        map.on('zoomend', function() {
+            const currentZoom = map.getZoom();
+            allMarkers.forEach(markerData => {
+                if (markerData.label) {
+                    // Check if the label is currently on the map before trying to remove it
+                    if (currentZoom <= initialZoom - 2 && map.hasLayer(markerData.label)) {
+                        map.removeLayer(markerData.label);
+                    } else if (currentZoom > initialZoom - 2 && !map.hasLayer(markerData.label)) {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             pos => initApp(pos.coords.latitude, pos.coords.longitude),
@@ -321,8 +472,11 @@
                         map.removeLayer(markerData.label);
                     }
                 }
+            });
             }
         });
+    </script>
+
     });
 </script>
 
@@ -337,8 +491,6 @@
 
     .leaflet-bar.leaflet-control-custom {
         border-radius: 4px;
-        display: flex; /* Align icon and text */
-        align-items: center; /* Vertically align icon and text */
     }
 </style>
 </body>
