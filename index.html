@@ -22,6 +22,7 @@
     .location { padding: 0.4em 0; border-bottom: 1px solid #ccc; cursor: pointer; }
     .location:hover { background: #f0f0f0; }
     .leaflet-tooltip {
+		font-size: 8px;
 		background: rgba(255, 255, 255, 0.7);  /* white at 70% opacity */
 		border: none;
 		box-shadow: none;
@@ -92,7 +93,7 @@
           icon: L.icon({
             iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
             iconSize: [12, 19],
-            iconAnchor: [6, 19],
+            iconAnchor: [0, 15],
             popupAnchor: [0, -19]
           })
         }).addTo(map).bindPopup(
@@ -101,7 +102,7 @@
           <a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}">Get Directions</a>`
         );
         const label = L.tooltip({
-          permanent: true, direction: 'bottom', offset: [0, 5], className: 'leaflet-tooltip'
+          permanent: true, direction: 'bottom', offset: [0, 0], className: 'leaflet-tooltip'
         }).setContent(p.projectNumber).setLatLng([p.lat, p.lon]).addTo(map);
 
         markers.push(marker);
@@ -140,7 +141,7 @@
       }).addTo(map).bindPopup("You are here").openPopup();
 
       const panToUser = L.Control.extend({
-        options: { position: 'topright' },
+        options: { position: 'left-side' },
         onAdd: function () {
           const btn = L.DomUtil.create('div', 'leaflet-control-locate');
           btn.innerHTML = '📍';
