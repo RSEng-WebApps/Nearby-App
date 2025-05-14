@@ -163,9 +163,11 @@
 
     function haversine(lat1, lon1, lat2, lon2) {
         const toRad = x => x * Math.PI / 180;
+        const R = 6371;
         const R = 6371; // Radius of the Earth in km
         const dLat = toRad(lat2 - lat1);
         const dLon = toRad(lat2 - lon1);
+        const dLon = toRad(lon2 - lon1);
         const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
@@ -175,6 +177,7 @@
         clearMarkers();
 
         projects.forEach(p => {
+            const distance = haversine(userLat, userLon, p.lat, p.lon);
             const distance = haversine(userLat, userLon, p.lat, p.lon); // Use user's lat/lon
             const popupHtml = `
                 <strong>${p.projectNumber}</strong> ${p.name}<br>
@@ -235,7 +238,7 @@
                 container.style.padding = '5px';
                 container.style.borderRadius = '4px';
                 container.style.cursor = 'pointer';
-                container.innerHTML = '<img src="https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png" style="width: 20px; height: 32px; vertical-align: middle; margin-right: 5px;">My Location';
+                container.innerHTML = '<img src="https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png" style="width: 16px; height: 26px; vertical-align: middle; margin-right: 5px;">My Location';
                 container.onclick = function() {
                     if (userLatLon) {
                         map.setView(userLatLon, 15); // Pan and zoom to user's location
@@ -256,6 +259,7 @@
 
         allProjects = await loadProjectsCSV();
         allProjects.forEach(p => {
+            p.distance = haversine(userLat, userLon, p.lat, p.lon);
             p.distance = haversine(userLat, userLon, p.lat, p.lon); // Ensure distance is calculated here as well
         });
         allProjects.sort((a, b) => a.distance - b.distance);
@@ -291,24 +295,6 @@
         });
 
         applyFilter(); // Initial render with only active/proposal
-
-        // Attach the zoomend listener AFTER map is initialized
-        map.on('zoomend', function() {
-            const currentZoom = map.getZoom();
-            allMarkers.forEach(markerData => {
-                if (markerData.label) {
-                    if (currentZoom > initialZoom + 2) {
-                        if (!map.hasLayer(markerData.label)) {
-                            map.addLayer(markerData.label);
-                        }
-                    } else {
-                        if (map.hasLayer(markerData.label)) {
-                            map.removeLayer(markerData.label);
-                        }
-                    }
-                }
-            });
-        });
     }
 
     if (navigator.geolocation) {
@@ -321,6 +307,23 @@
     } else {
         projectListDiv.innerText = "Geolocation not supported.";
     }
+
+    map.on('zoomend', function() {
+        const currentZoom = map.getZoom();
+        allMarkers.forEach(markerData => {
+            if (markerData.label) {
+                if (currentZoom > initialZoom + 2) {
+                    if (!map.hasLayer(markerData.label)) {
+                        map.addLayer(markerData.label);
+                    }
+                } else {
+                    if (map.hasLayer(markerData.label)) {
+                        map.removeLayer(markerData.label);
+                    }
+                }
+            }
+        });
+    });
 </script>
 
 <style>
