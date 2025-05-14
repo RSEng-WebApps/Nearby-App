@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -20,7 +21,20 @@
     #list { flex: 1; overflow-y: auto; font-size: 0.9em; }
     .location { padding: 0.4em 0; border-bottom: 1px solid #ccc; cursor: pointer; }
     .location:hover { background: #f0f0f0; }
-    .leaflet-tooltip { font-size: 10px; background: none; border: none; box-shadow: none; }
+    .leaflet-tooltip {
+      font-size: 10px;
+      background: none;
+      border: none;
+      box-shadow: none;
+    }
+    .leaflet-control-locate {
+      background: white;
+      padding: 5px 7px;
+      font-size: 16px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
     @media (orientation: portrait) {
       #container { flex-direction: column; }
       #sidebar { width: 100%; height: 40vh; max-width: none; }
@@ -43,6 +57,7 @@
     let map, initialZoom, userMarker;
     let allProjects = [], markers = [], tooltips = [];
     let showAll = false;
+    let userLatLon = null;
 
     function haversine(lat1, lon1, lat2, lon2) {
       const R = 6371;
@@ -63,7 +78,7 @@
       }).filter(p => p);
     }
 
-    function renderProjects(projects, userLat, userLon) {
+    function renderProjects(projects) {
       const list = document.getElementById("list");
       list.innerHTML = "";
       markers.forEach(m => map.removeLayer(m));
@@ -71,8 +86,15 @@
       markers = []; tooltips = [];
 
       projects.forEach(p => {
-        const dist = haversine(userLat, userLon, p.lat, p.lon);
-        const marker = L.marker([p.lat, p.lon]).addTo(map).bindPopup(
+        const dist = haversine(userLatLon[0], userLatLon[1], p.lat, p.lon);
+        const marker = L.marker([p.lat, p.lon], {
+          icon: L.icon({
+            iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
+            iconSize: [12, 19],
+            iconAnchor: [6, 19],
+            popupAnchor: [0, -19]
+          })
+        }).addTo(map).bindPopup(
           `<strong>${p.projectNumber}</strong> ${p.name}<br>${p.legal}<br>${p.address}<br>
           Project Manager: ${p.manager}<br>Status: ${p.status}<br>
           <a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}">Get Directions</a>`
@@ -104,29 +126,42 @@
     }
 
     async function initMap(lat, lon) {
-      map = L.map('map').setView([lat, lon], 13);
+      userLatLon = [lat, lon];
+      map = L.map('map').setView(userLatLon, 13);
       initialZoom = map.getZoom();
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-      userMarker = L.marker([lat, lon], {
+      userMarker = L.marker(userLatLon, {
         icon: L.icon({
           iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png',
-          iconSize: [20, 32],
-          iconAnchor: [10, 32]
+          iconSize: [16, 26],
+          iconAnchor: [8, 26]
         })
       }).addTo(map).bindPopup("You are here").openPopup();
+
+      const panToUser = L.Control.extend({
+        options: { position: 'topright' },
+        onAdd: function () {
+          const btn = L.DomUtil.create('div', 'leaflet-control-locate');
+          btn.innerHTML = '📍';
+          btn.title = 'Pan to My Location';
+          btn.onclick = () => map.setView(userLatLon, 15);
+          return btn;
+        }
+      });
+      map.addControl(new panToUser());
 
       allProjects = await loadCSV();
       allProjects.forEach(p => p.distance = haversine(lat, lon, p.lat, p.lon));
       allProjects.sort((a, b) => a.distance - b.distance);
-      renderProjects(filterProjects(allProjects), lat, lon);
+      renderProjects(filterProjects(allProjects));
 
       document.getElementById("search").addEventListener("input", () =>
-        renderProjects(filterProjects(allProjects), lat, lon)
+        renderProjects(filterProjects(allProjects))
       );
       document.getElementById("filter").addEventListener("click", () => {
         showAll = !showAll;
         document.getElementById("filter").textContent = showAll ? "Show Active/Proposal Only" : "Show All Projects";
-        renderProjects(filterProjects(allProjects), lat, lon);
+        renderProjects(filterProjects(allProjects));
       });
 
       map.on("zoomend", () => {
