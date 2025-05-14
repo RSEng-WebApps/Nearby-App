@@ -22,10 +22,11 @@
     .location { padding: 0.4em 0; border-bottom: 1px solid #ccc; cursor: pointer; }
     .location:hover { background: #f0f0f0; }
     .leaflet-tooltip {
-      font-size: 10px;
-      background: none;
-      border: none;
-      box-shadow: none;
+		background: rgba(255, 255, 255, 0.7);  /* white at 70% opacity */
+		border: none;
+		box-shadow: none;
+		padding: 1px 2px;                       /* minimal padding so it hugs the text */
+		border-radius: 2px;                     /* optional—rounds the corners slightly */
     }
     .leaflet-control-locate {
       background: white;
@@ -100,7 +101,7 @@
           <a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}">Get Directions</a>`
         );
         const label = L.tooltip({
-          permanent: true, direction: 'top', offset: [0, -10], className: 'leaflet-tooltip'
+          permanent: true, direction: 'bottom', offset: [0, 5], className: 'leaflet-tooltip'
         }).setContent(p.projectNumber).setLatLng([p.lat, p.lon]).addTo(map);
 
         markers.push(marker);
