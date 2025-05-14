@@ -291,6 +291,24 @@
         });
 
         applyFilter(); // Initial render with only active/proposal
+
+        // Attach the zoomend listener AFTER map is initialized
+        map.on('zoomend', function() {
+            const currentZoom = map.getZoom();
+            allMarkers.forEach(markerData => {
+                if (markerData.label) {
+                    if (currentZoom > initialZoom + 2) {
+                        if (!map.hasLayer(markerData.label)) {
+                            map.addLayer(markerData.label);
+                        }
+                    } else {
+                        if (map.hasLayer(markerData.label)) {
+                            map.removeLayer(markerData.label);
+                        }
+                    }
+                }
+            });
+        });
     }
 
     if (navigator.geolocation) {
@@ -303,23 +321,6 @@
     } else {
         projectListDiv.innerText = "Geolocation not supported.";
     }
-
-    map.on('zoomend', function() {
-        const currentZoom = map.getZoom();
-        allMarkers.forEach(markerData => {
-            if (markerData.label) {
-                if (currentZoom > initialZoom + 2) {
-                    if (!map.hasLayer(markerData.label)) {
-                        map.addLayer(markerData.label);
-                    }
-                } else {
-                    if (map.hasLayer(markerData.label)) {
-                        map.removeLayer(markerData.label);
-                    }
-                }
-            }
-        });
-    });
 </script>
 
 <style>
