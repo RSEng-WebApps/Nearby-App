@@ -165,7 +165,7 @@
         const toRad = x => x * Math.PI / 180;
         const R = 6371; // Radius of the Earth in km
         const dLat = toRad(lat2 - lat1);
-        const dLon = toRad(lon2 - lon1);
+        const dLon = toRad(lat2 - lon1);
         const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
@@ -235,7 +235,7 @@
                 container.style.padding = '5px';
                 container.style.borderRadius = '4px';
                 container.style.cursor = 'pointer';
-                container.innerHTML = '<img src="https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png" style="width: 16px; height: 26px; vertical-align: middle; margin-right: 5px;">My Location';
+                container.innerHTML = '<img src="https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png" style="width: 20px; height: 32px; vertical-align: middle; margin-right: 5px;">My Location';
                 container.onclick = function() {
                     if (userLatLon) {
                         map.setView(userLatLon, 15); // Pan and zoom to user's location
