@@ -93,7 +93,7 @@
           icon: L.icon({
             iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
             iconSize: [12, 19],
-            iconAnchor: [0, 15],
+            iconAnchor: [6, 15],
             popupAnchor: [0, -19]
           })
         }).addTo(map).bindPopup(
@@ -141,7 +141,7 @@
       }).addTo(map).bindPopup("You are here").openPopup();
 
       const panToUser = L.Control.extend({
-        options: { position: 'left-side' },
+        options: { position: 'topright' },
         onAdd: function () {
           const btn = L.DomUtil.create('div', 'leaflet-control-locate');
           btn.innerHTML = '📍';
