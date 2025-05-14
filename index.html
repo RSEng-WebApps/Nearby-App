@@ -100,7 +100,7 @@
           <a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}">Get Directions</a>`
         );
         const label = L.tooltip({
-          permanent: true, direction: 'top', offset: [0, -20], className: 'leaflet-tooltip'
+          permanent: true, direction: 'top', offset: [0, -10], className: 'leaflet-tooltip'
         }).setContent(p.projectNumber).setLatLng([p.lat, p.lon]).addTo(map);
 
         markers.push(marker);
