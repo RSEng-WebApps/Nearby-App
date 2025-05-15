@@ -215,9 +215,9 @@
       allProjects.sort((a, b) => a.distance - b.distance);
       renderProjects(filterProjects(allProjects));
 
-      document.getElementById("search").addEventListener("input", () =>
-        renderProjects(filterProjects(allProjects))
-      );
+     // document.getElementById("search").addEventListener("input", () =>
+     //   renderProjects(filterProjects(allProjects))
+     // );
       document.getElementById("filter").addEventListener("click", () => {
         showAll = !showAll;
         document.getElementById("filter").textContent =
