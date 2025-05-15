@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,12 +21,12 @@
     .location { padding: 0.4em 0; border-bottom: 1px solid #ccc; cursor: pointer; }
     .location:hover { background: #f0f0f0; }
     .leaflet-tooltip {
-		font-size: 8px;
-		background: rgba(255, 255, 255, 0.7);  /* white at 70% opacity */
-		border: none;
-		box-shadow: none;
-		padding: 1px 2px;                       /* minimal padding so it hugs the text */
-		border-radius: 2px;                     /* optional—rounds the corners slightly */
+      font-size: 8px;
+      background: rgba(255, 255, 255, 0.7);
+      border: none;
+      box-shadow: none;
+      padding: 1px 2px;
+      border-radius: 2px;
     }
     .leaflet-control-locate {
       background: white;
@@ -66,17 +65,43 @@
       const toRad = deg => deg * Math.PI / 180;
       const dLat = toRad(lat2 - lat1);
       const dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+      const a = Math.sin(dLat/2)**2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon/2)**2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
+    // 1) Parse the 9th column (link) out of each line
     async function loadCSV() {
       const res = await fetch('projectrefined.csv');
       const lines = (await res.text()).trim().split('\n').slice(1);
       return lines.map(line => {
-        const [projectNumber, name, address, lat, lon, legal, manager, status] = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(s => s.replace(/"/g, '').trim());
+        const [
+          projectNumber,
+          name,
+          address,
+          lat,
+          lon,
+          legal,
+          manager,
+          status,
+          link      // ← new field
+        ] = line
+          .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+          .map(s => s.replace(/"/g, '').trim());
+
         if (!lat || !lon || lat == 0 || lon == 0) return null;
-        return { projectNumber, name, address, lat: +lat, lon: +lon, legal, manager, status: status.toLowerCase() };
+        return {
+          projectNumber,
+          name,
+          address,
+          lat: +lat,
+          lon: +lon,
+          legal,
+          manager,
+          status: status.toLowerCase(),
+          link                   // ← include in returned object
+        };
       }).filter(p => p);
     }
 
@@ -89,21 +114,50 @@
 
       projects.forEach(p => {
         const dist = haversine(userLatLon[0], userLatLon[1], p.lat, p.lon);
-        const marker = L.marker([p.lat, p.lon], {
-          icon: L.icon({
-            iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
-            iconSize: [12, 19],
-            iconAnchor: [6, 15],
-            popupAnchor: [0, -19]
-          })
-        }).addTo(map).bindPopup(
-          `<strong>${p.projectNumber}</strong> ${p.name}<br>${p.legal}<br>${p.address}<br>
-          Project Manager: ${p.manager}<br>Status: ${p.status}<br>
-          <a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}">Get Directions</a>`
-        );
+
+        // scaled-down default icon for project pins
+        const icon = L.icon({
+          iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
+          iconSize: [12, 19],
+          iconAnchor: [6, 15],
+          popupAnchor: [0, -19]
+        });
+
+        // 2) Popup with the projectNumber wrapped in an <a> to p.link
+        const popupHtml = `
+          <div style="line-height:1.3;">
+            <a
+              href="${p.link}"
+              target="_blank"
+              style="text-decoration:none; color:inherit;">
+              <strong>${p.projectNumber}</strong>
+            </a>
+            &nbsp;${p.name}<br>
+            ${p.legal}<br>
+            ${p.address}<br>
+            Project Manager: ${p.manager}<br>
+            Status: ${p.status}<br>
+            <a
+              href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}"
+              target="_blank">
+              Get Directions
+            </a>
+          </div>
+        `;
+
+        const marker = L.marker([p.lat, p.lon], { icon })
+          .addTo(map)
+          .bindPopup(popupHtml);
+
         const label = L.tooltip({
-          permanent: true, direction: 'bottom', offset: [0, 0], className: 'leaflet-tooltip'
-        }).setContent(p.projectNumber).setLatLng([p.lat, p.lon]).addTo(map);
+          permanent: true,
+          direction: 'bottom',
+          offset: [0, 0],
+          className: 'leaflet-tooltip'
+        })
+        .setContent(p.projectNumber)
+        .setLatLng([p.lat, p.lon])
+        .addTo(map);
 
         markers.push(marker);
         tooltips.push(label);
@@ -132,17 +186,21 @@
       map = L.map('map').setView(userLatLon, 13);
       initialZoom = map.getZoom();
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
       userMarker = L.marker(userLatLon, {
         icon: L.icon({
-          iconUrl: '📍',
-          iconSize: [16, 26],
-          iconAnchor: [8, 26]
+          iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-red.png',
+          iconSize: [20, 32],
+          iconAnchor: [10, 32]
         })
-      }).addTo(map).bindPopup("You are here").openPopup();
+      })
+      .addTo(map)
+      .bindPopup("You are here")
+      .openPopup();
 
-      const panToUser = L.Control.extend({
+      const PanControl = L.Control.extend({
         options: { position: 'topright' },
-        onAdd: function () {
+        onAdd: () => {
           const btn = L.DomUtil.create('div', 'leaflet-control-locate');
           btn.innerHTML = '📍';
           btn.title = 'Pan to My Location';
@@ -150,7 +208,7 @@
           return btn;
         }
       });
-      map.addControl(new panToUser());
+      map.addControl(new PanControl());
 
       allProjects = await loadCSV();
       allProjects.forEach(p => p.distance = haversine(lat, lon, p.lat, p.lon));
@@ -162,7 +220,8 @@
       );
       document.getElementById("filter").addEventListener("click", () => {
         showAll = !showAll;
-        document.getElementById("filter").textContent = showAll ? "Show Active/Proposal Only" : "Show All Projects";
+        document.getElementById("filter").textContent =
+          showAll ? "Show Active/Proposal Only" : "Show All Projects";
         renderProjects(filterProjects(allProjects));
       });
 
