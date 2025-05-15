@@ -246,22 +246,5 @@
       document.getElementById("list").innerText = "Geolocation not supported.";
     }
   </script>
-
-<script>
-function debounce(func, delay) {
-  let timeout;
-  return function (...args) {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, args), delay);
-  };
-}
-
-const debouncedSearch = debounce(() => {
-  renderProjects(filterProjects(allProjects));
-}, 500); // 500ms delay
-
-document.getElementById("search").addEventListener("input", debouncedSearch);
-</script>
-
 </body>
 </html>
